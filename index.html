@@ -1,0 +1,1679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>HashFlip — Mining ROI Analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+<style>
+:root {
+  --bg:    #080b0f;
+  --bg2:   #0d1117;
+  --sur:   #111820;
+  --card:  #141e2a;
+  --bor:   #1e2d3d;
+  --bor2:  #254060;
+
+  --amber:  #f59e0b;
+  --amber2: #fbbf24;
+  --amber3: #d97706;
+  --amber-dim: rgba(245,158,11,0.1);
+  --amber-glow: rgba(245,158,11,0.25);
+
+  --cyan:  #22d3ee;
+  --cyan2: #06b6d4;
+  --cyan-dim: rgba(34,211,238,0.08);
+
+  --grn:   #4ade80;
+  --grn2:  #22c55e;
+  --grn-dim: rgba(74,222,128,0.08);
+
+  --red:   #f87171;
+  --red2:  #ef4444;
+  --red-dim: rgba(248,113,113,0.08);
+
+  --pur:   #a78bfa;
+
+  --txt:   #e2e8f0;
+  --txt2:  #94a3b8;
+  --dim:   #64748b;
+  --mut:   #334155;
+
+  --glow-amber: 0 0 20px rgba(245,158,11,0.4), 0 0 60px rgba(245,158,11,0.1);
+  --glow-cyan:  0 0 20px rgba(34,211,238,0.3), 0 0 60px rgba(34,211,238,0.08);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--txt);
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── SCANLINE BG ── */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.03) 2px,
+    rgba(0,0,0,0.03) 4px
+  );
+}
+
+/* circuit grid */
+body::after {
+  content: '';
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(34,211,238,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(34,211,238,0.02) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* ── HEADER ── */
+header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(8,11,15,0.95);
+  border-bottom: 1px solid var(--bor);
+  backdrop-filter: blur(20px);
+  padding: 0 1.2rem;
+  display: flex; align-items: center; justify-content: space-between;
+  height: 60px;
+}
+
+.logo {
+  display: flex; align-items: center; gap: 10px;
+  font-family: 'Orbitron', monospace;
+  font-size: 1.3rem; font-weight: 900;
+  letter-spacing: .08em;
+  color: var(--amber);
+  text-shadow: var(--glow-amber);
+  text-decoration: none;
+}
+.logo-icon {
+  width: 36px; height: 36px;
+  background: linear-gradient(135deg, var(--amber), var(--amber3));
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem; flex-shrink: 0;
+  box-shadow: var(--glow-amber);
+}
+.logo span { color: var(--cyan); }
+
+.live-pill {
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(74,222,128,0.08);
+  border: 1px solid rgba(74,222,128,0.25);
+  border-radius: 99px; padding: 4px 12px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: .65rem; color: var(--grn);
+  letter-spacing: .1em;
+}
+.live-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--grn);
+  box-shadow: 0 0 6px var(--grn);
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.7)} }
+
+/* ── PRICE TICKER ── */
+.ticker {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--bor);
+  padding: 6px 1.2rem;
+  display: flex; gap: 2rem; align-items: center; flex-wrap: wrap;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: .7rem; color: var(--dim);
+  position: relative; z-index: 10;
+}
+.ticker-item { display: flex; align-items: center; gap: 6px; }
+.ticker-val { font-weight: 700; }
+.ticker-val.amber { color: var(--amber); }
+.ticker-val.cyan { color: var(--cyan); }
+.ticker-val.grn { color: var(--grn); }
+.ticker-label { color: var(--mut); font-size: .6rem; }
+
+/* ── MAIN ── */
+main {
+  position: relative; z-index: 1;
+  max-width: 1100px; margin: 0 auto;
+  padding: 1.5rem 1.2rem 4rem;
+}
+
+/* ── SECTION HEADING ── */
+.sh {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 1rem;
+}
+.sh-line {
+  flex: 1; height: 1px;
+  background: linear-gradient(90deg, var(--bor2), transparent);
+}
+.sh-text {
+  font-family: 'Orbitron', monospace;
+  font-size: .7rem; font-weight: 700;
+  letter-spacing: .2em; text-transform: uppercase;
+  color: var(--amber);
+  white-space: nowrap;
+}
+.sh-num {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: .65rem; color: var(--dim);
+}
+
+/* ── CARDS ── */
+.card {
+  background: var(--card);
+  border: 1px solid var(--bor);
+  border-radius: 12px;
+  padding: 1.2rem;
+  position: relative;
+  overflow: hidden;
+}
+.card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(245,158,11,0.3), transparent);
+}
+
+.card-header {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: .65rem; text-transform: uppercase; letter-spacing: .12em;
+  color: var(--amber); margin-bottom: 1rem;
+  display: flex; align-items: center; gap: 8px;
+}
+
+/* ── GRID ── */
+.g2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.g3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+
+/* ── INPUTS ── */
+.inp {
+  width: 100%;
+  background: var(--bg2);
+  border: 1px solid var(--bor);
+  border-radius: 8px;
+  color: var(--txt);
+  font-family: 'Rajdhani', sans-serif;
+  font-size: 1rem; font-weight: 500;
+  padding: .55rem .8rem;
+  transition: border-color .15s, box-shadow .15s;
+  outline: none;
+}
+.inp:focus {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px rgba(245,158,11,0.12);
+}
+.inp option { background: var(--card); }
+
+label {
+  display: block;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: .65rem; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--dim); margin-bottom: 5px;
+}
+
+/* ── FACILITY SELECTOR ── */
+.fac-grid {
+  display: grid; grid-template-columns: repeat(5,1fr); gap: .5rem;
+}
+.fac-btn {
+  background: var(--bg2);
+  border: 1px solid var(--bor);
+  border-radius: 8px;
+  padding: .6rem .4rem;
+  cursor: pointer;
+  text-align: center;
+  transition: all .15s;
+  font-family: 'Rajdhani', sans-serif;
+  position: relative;
+}
+.fac-btn:hover { border-color: var(--amber2); }
+.fac-btn.active {
+  background: rgba(245,158,11,0.1);
+  border-color: var(--amber);
+  box-shadow: 0 0 14px rgba(245,158,11,0.2);
+}
+.fac-lv {
+  font-family: 'Orbitron', monospace;
+  font-size: .8rem; font-weight: 700;
+  color: var(--amber);
+}
+.fac-dim { font-size: .7rem; color: var(--dim); }
+.fac-stat { font-size: .65rem; color: var(--txt2); margin-top: 3px; }
+.fac-rate { font-size: .65rem; color: var(--amber2); }
+
+/* ── MARKET LISTINGS GRID ── */
+#marketGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: .65rem;
+  max-height: 440px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--bor2) transparent;
+}
+
+.listing-card {
+  background: var(--bg2);
+  border: 1px solid var(--bor);
+  border-radius: 10px;
+  padding: .8rem .7rem;
+  cursor: pointer;
+  transition: all .15s;
+  position: relative;
+}
+.listing-card:hover { border-color: var(--cyan2); transform: translateY(-2px); box-shadow: 0 4px 16px rgba(34,211,238,0.12); }
+.listing-card.selected {
+  border-color: var(--amber);
+  background: rgba(245,158,11,0.06);
+  box-shadow: 0 0 16px rgba(245,158,11,0.2);
+}
+.listing-img {
+  width: 100%; aspect-ratio: 1;
+  object-fit: contain; border-radius: 6px;
+  background: var(--sur); margin-bottom: .5rem;
+  display: block;
+}
+.listing-img-placeholder {
+  width: 100%; aspect-ratio: 1;
+  border-radius: 6px; background: var(--sur);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.8rem; margin-bottom: .5rem;
+  color: var(--mut);
+}
+.listing-name {
+  font-weight: 700; font-size: .85rem;
+  color: var(--txt); line-height: 1.2;
+  margin-bottom: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.listing-price {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: .75rem; font-weight: 700;
+}
+.listing-price.hcash { color: var(--amber); }
+.listing-price.avax  { color: var(--cyan);  }
+.listing-price.usdc  { color: var(--grn);   }
+.listing-stats {
+  font-size: .7rem; color: var(--dim); margin-top: 4px;
+}
+.listing-badge {
+  position: absolute; top: 5px; right: 5px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: .55rem; padding: 2px 5px;
+  border-radius: 4px; text-transform: uppercase; letter-spacing: .06em;
+}
+.badge-deal { background: rgba(74,222,128,0.15); color: var(--grn); border: 1px solid rgba(74,222,128,0.3); }
+.badge-over { background: rgba(248,113,113,0.15); color: var(--red); border: 1px solid rgba(248,113,113,0.3); }
+.badge-fair { background: rgba(245,158,11,0.12); color: var(--amber); border: 1px solid rgba(245,158,11,0.25); }
+
+/* ── FILTER BAR ── */
+.filter-bar {
+  display: flex; gap: .5rem; align-items: center; flex-wrap: wrap;
+  margin-bottom: .75rem;
+}
+.filter-bar .inp { flex: 1; min-width: 140px; font-size: .85rem; }
+.sort-btn {
+  background: var(--bg2); border: 1px solid var(--bor);
+  border-radius: 7px; padding: 6px 12px; cursor: pointer;
+  font-family: 'Share Tech Mono', monospace; font-size: .62rem;
+  color: var(--dim); white-space: nowrap; transition: all .15s;
+}
+.sort-btn.active { border-color: var(--amber); color: var(--amber); background: rgba(245,158,11,0.06); }
+.sort-btn:hover { color: var(--txt); border-color: var(--bor2); }
+
+/* ── RESULTS PANEL ── */
+#resultsPanel {
+  display: none;
+  animation: fadeUp .25s ease;
+}
+@keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:none} }
+
+/* ── STAT GRID ── */
+.stat-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: .5rem;
+  margin-bottom: 1rem;
+}
+@media(min-width:600px) { .stat-grid { grid-template-columns: repeat(4, 1fr); } }
+.stat-box {
+  background: var(--bg2);
+  border: 1px solid var(--bor);
+  border-radius: 9px;
+  padding: .75rem .8rem;
+}
+.stat-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: .6rem; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--dim); margin-bottom: 4px;
+}
+.stat-val {
+  font-family: 'Orbitron', monospace;
+  font-size: 1.1rem; font-weight: 700;
+  line-height: 1;
+}
+.stat-sub { font-size: .7rem; color: var(--txt2); margin-top: 3px; }
+
+.v-amber { color: var(--amber); text-shadow: 0 0 10px rgba(245,158,11,0.4); }
+.v-grn   { color: var(--grn);   text-shadow: 0 0 10px rgba(74,222,128,0.3); }
+.v-red   { color: var(--red);   }
+.v-cyan  { color: var(--cyan);  }
+.v-pur   { color: var(--pur);   }
+
+/* ── VERDICT BANNER ── */
+.verdict {
+  border-radius: 12px; padding: 1rem 1.2rem;
+  margin-bottom: 1rem;
+  display: flex; align-items: flex-start; gap: 14px;
+}
+.verdict-icon { font-size: 2rem; flex-shrink: 0; line-height: 1; }
+.verdict-title {
+  font-family: 'Orbitron', monospace;
+  font-size: .85rem; font-weight: 700; margin-bottom: 4px;
+}
+.verdict-sub { font-size: .85rem; color: var(--txt2); line-height: 1.5; }
+
+/* ── TIMELINE BAR ── */
+.tl-bar-wrap { margin-bottom: 1rem; }
+.tl-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: .62rem; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--dim); margin-bottom: 6px;
+  display: flex; justify-content: space-between;
+}
+.tl-track {
+  height: 8px; background: var(--bor);
+  border-radius: 99px; overflow: hidden;
+  position: relative;
+}
+.tl-fill {
+  height: 100%; border-radius: 99px;
+  background: linear-gradient(90deg, var(--amber), var(--amber2));
+  transition: width .6s var(--ease);
+  position: relative;
+}
+.tl-fill::after {
+  content: '';
+  position: absolute; right: 0; top: 0; bottom: 0; width: 3px;
+  background: white; border-radius: 2px;
+  box-shadow: 0 0 6px var(--amber2);
+}
+
+/* ── PRICE COMPARISON ── */
+.price-compare {
+  background: var(--bg2);
+  border: 1px solid var(--bor);
+  border-radius: 10px;
+  padding: .9rem 1rem;
+  display: flex; align-items: center; gap: .75rem;
+  flex-wrap: wrap; margin-bottom: .75rem;
+}
+.pc-col { flex: 1; min-width: 100px; }
+.pc-label {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: .6rem; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--dim); margin-bottom: 4px;
+}
+.pc-val {
+  font-family: 'Orbitron', monospace;
+  font-size: .9rem; font-weight: 700;
+}
+.pc-div {
+  font-size: 1.5rem; color: var(--bor2); flex-shrink: 0;
+}
+.pc-diff {
+  background: var(--grn-dim);
+  border: 1px solid rgba(74,222,128,0.2);
+  border-radius: 8px; padding: .6rem .8rem; flex: 1; min-width: 100px;
+}
+.pc-diff.over {
+  background: var(--red-dim);
+  border-color: rgba(248,113,113,0.2);
+}
+.pc-diff-val {
+  font-family: 'Orbitron', monospace;
+  font-size: .9rem; font-weight: 700;
+}
+
+/* ── BREAKDOWN TABLE ── */
+.bd-table { width: 100%; border-collapse: collapse; }
+.bd-table td {
+  padding: .45rem .7rem;
+  border-bottom: 1px solid rgba(30,45,61,0.5);
+  font-size: .85rem;
+}
+.bd-table td:first-child {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: .62rem; text-transform: uppercase;
+  letter-spacing: .08em; color: var(--dim);
+}
+.bd-table td:last-child {
+  text-align: right;
+  font-family: 'Orbitron', monospace;
+  font-size: .78rem; font-weight: 700;
+}
+.bd-table tr:last-child td { border-bottom: none; }
+
+/* ── LOADING ── */
+.spin {
+  display: inline-block;
+  width: 16px; height: 16px;
+  border: 2px solid var(--bor2);
+  border-top-color: var(--amber);
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading-msg {
+  text-align: center; padding: 3rem 1rem;
+  color: var(--dim);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: .8rem;
+  display: flex; flex-direction: column; align-items: center; gap: .75rem;
+}
+
+/* ── ERROR ── */
+.err-msg {
+  background: rgba(248,113,113,0.06);
+  border: 1px solid rgba(248,113,113,0.2);
+  border-radius: 8px; padding: .9rem 1rem;
+  color: var(--red);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: .75rem; text-align: center;
+}
+
+/* ── SCROLL ── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bor2); border-radius: 99px; }
+
+/* ── BUTTON ── */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: linear-gradient(135deg, var(--amber3), var(--amber));
+  color: #000; border: none; border-radius: 8px;
+  font-family: 'Orbitron', monospace; font-size: .72rem; font-weight: 700;
+  letter-spacing: .08em; padding: .6rem 1.2rem;
+  cursor: pointer; transition: all .15s;
+  text-transform: uppercase;
+}
+.btn:hover {
+  box-shadow: 0 4px 18px rgba(245,158,11,0.4);
+  transform: translateY(-1px);
+}
+.btn-sm {
+  padding: .4rem .8rem; font-size: .6rem;
+}
+.btn-ghost {
+  background: transparent; border: 1px solid var(--bor2);
+  color: var(--dim);
+}
+.btn-ghost:hover { border-color: var(--amber); color: var(--amber); box-shadow: none; }
+
+/* ── NOTIF ── */
+#notifArea {
+  position: fixed; bottom: 1.5rem; right: 1.2rem; z-index: 999;
+  display: flex; flex-direction: column; gap: .5rem; align-items: flex-end;
+}
+.ntf {
+  background: var(--card);
+  border: 1px solid var(--bor2);
+  border-radius: 10px; padding: .65rem 1rem;
+  font-family: 'Share Tech Mono', monospace; font-size: .72rem;
+  color: var(--txt); max-width: 280px;
+  animation: ntfIn .25s ease;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+@keyframes ntfIn { from{opacity:0;transform:translateX(16px)} to{opacity:1;transform:none} }
+
+/* ── RESPONSIVE ── */
+@media(max-width:640px) {
+  .g2, .g3 { grid-template-columns: 1fr; }
+  .fac-grid { grid-template-columns: repeat(3,1fr); }
+  #marketGrid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+  header { padding: 0 .85rem; }
+  main { padding: 1rem .85rem 3rem; }
+}
+
+/* ── HORIZONTAL SCROLL TABS ── */
+.tabs {
+  display: flex; gap: .35rem; overflow-x: auto; scrollbar-width: none;
+  margin-bottom: 1rem; padding-bottom: 2px;
+}
+.tabs::-webkit-scrollbar { display: none; }
+.tab {
+  flex-shrink: 0;
+  background: var(--bg2); border: 1px solid var(--bor);
+  border-radius: 7px; padding: .4rem .9rem;
+  font-family: 'Share Tech Mono', monospace; font-size: .65rem;
+  color: var(--dim); cursor: pointer; transition: all .15s;
+  white-space: nowrap;
+}
+.tab:hover { color: var(--txt); border-color: var(--bor2); }
+.tab.on {
+  background: rgba(245,158,11,0.1);
+  border-color: var(--amber);
+  color: var(--amber);
+}
+
+/* intro hero */
+.hero-intro {
+  background: linear-gradient(135deg, rgba(245,158,11,0.05), rgba(34,211,238,0.03), transparent);
+  border: 1px solid rgba(245,158,11,0.15);
+  border-radius: 16px; padding: 1.5rem;
+  margin-bottom: 1.5rem; position: relative; overflow: hidden;
+}
+.hero-intro::before {
+  content: '⛏';
+  position: absolute; right: 1.5rem; top: 50%; transform: translateY(-50%);
+  font-size: 5rem; opacity: .04; pointer-events: none;
+}
+.hero-title {
+  font-family: 'Orbitron', monospace;
+  font-size: 1.4rem; font-weight: 900;
+  color: var(--amber);
+  text-shadow: var(--glow-amber);
+  margin-bottom: .35rem;
+}
+.hero-sub { color: var(--txt2); font-size: .95rem; line-height: 1.55; }
+.hero-chips {
+  display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .85rem;
+}
+.chip {
+  background: rgba(34,211,238,0.07);
+  border: 1px solid rgba(34,211,238,0.18);
+  border-radius: 99px; padding: 4px 12px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: .62rem; color: var(--cyan);
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    HASH<span>FLIP</span>
+  </div>
+  <div class="live-pill">
+    <div class="live-dot"></div>
+    LIVE CHAIN DATA
+  </div>
+</header>
+
+<!-- PRICE TICKER -->
+<div class="ticker">
+  <div class="ticker-item">
+    <span class="ticker-label">hCASH</span>
+    <span class="ticker-val amber" id="tk-hcash">—</span>
+  </div>
+  <div class="ticker-item">
+    <span class="ticker-label">AVAX</span>
+    <span class="ticker-val cyan" id="tk-avax">—</span>
+  </div>
+  <div class="ticker-item">
+    <span class="ticker-label">NETWORK HASH</span>
+    <span class="ticker-val grn" id="tk-nethash">—</span>
+  </div>
+  <div class="ticker-item">
+    <span class="ticker-label">DAILY EMISSION</span>
+    <span class="ticker-val" id="tk-emission" style="color:var(--pur)">—</span>
+  </div>
+  <div class="ticker-item">
+    <span class="ticker-label">LISTINGS</span>
+    <span class="ticker-val" id="tk-listings" style="color:var(--txt2)">—</span>
+  </div>
+</div>
+
+<main>
+
+  <!-- HERO -->
+  <div class="hero-intro">
+    <div class="hero-title">HASHFLIP</div>
+    <div class="hero-sub">Pick a facility level, browse live marketplace listings, and instantly see daily/monthly earnings, break-even days, and whether a listing is a deal or a trap — all in USD.</div>
+    <div class="hero-chips">
+      <div class="chip">⚡ Live on-chain electricity rates</div>
+      <div class="chip">🛒 Real marketplace prices</div>
+      <div class="chip">📊 USD ROI analysis</div>
+      <div class="chip">💰 Break-even calculator</div>
+    </div>
+  </div>
+
+  <!-- STEP 1: FACILITY -->
+  <div class="sh">
+    <div class="sh-num">01</div>
+    <div class="sh-text">Select Your Facility Level</div>
+    <div class="sh-line"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:1.25rem">
+    <div class="card-header">⚙ Facility Configuration</div>
+    <div class="fac-grid" id="facGrid">
+      <!-- JS fills -->
+    </div>
+    <div style="margin-top:.75rem; display:flex; align-items:center; gap:1rem; flex-wrap:wrap">
+      <div style="font-family:'Share Tech Mono',monospace; font-size:.65rem; color:var(--dim)">
+        ELEC RATE: <span id="facRateDisplay" style="color:var(--amber); font-weight:700">—</span> hCASH/kWh
+        <span id="rateSourceBadge" style="margin-left:6px; background:rgba(34,211,238,0.1); border:1px solid rgba(34,211,238,0.2); border-radius:4px; padding:1px 6px; color:var(--cyan); font-size:.55rem">loading…</span>
+      </div>
+      <div style="font-family:'Share Tech Mono',monospace; font-size:.65rem; color:var(--dim)">
+        POWER CAP: <span id="facPowerDisplay" style="color:var(--cyan); font-weight:700">—</span> W
+      </div>
+      <div style="font-family:'Share Tech Mono',monospace; font-size:.65rem; color:var(--dim)">
+        SLOTS: <span id="facSlotsDisplay" style="color:var(--grn); font-weight:700">—</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 2: MARKETPLACE -->
+  <div class="sh">
+    <div class="sh-num">02</div>
+    <div class="sh-text">Browse Marketplace — Click to Analyze</div>
+    <div class="sh-line"></div>
+    <button class="btn btn-sm btn-ghost" onclick="reloadMarket()">↺ Refresh</button>
+  </div>
+
+  <div class="card" style="margin-bottom:1.25rem">
+    <div class="filter-bar">
+      <input id="mktSearch" class="inp" type="text" placeholder="🔍 Filter by name…" oninput="renderMarket()">
+      <select id="sortBy" class="inp" style="max-width:160px; font-size:.8rem" onchange="renderMarket()">
+        <option value="price-asc">Price ↑ Low to High</option>
+        <option value="price-desc">Price ↓ High to Low</option>
+        <option value="hash-desc">Hashrate ↓ Highest</option>
+        <option value="roi">ROI ↓ Best Deal</option>
+      </select>
+      <select id="currencyFilter" class="inp" style="max-width:130px; font-size:.8rem" onchange="renderMarket()">
+        <option value="all">All Currencies</option>
+        <option value="hcash">hCASH only</option>
+        <option value="avax">AVAX only</option>
+      </select>
+    </div>
+    <div id="marketGrid">
+      <div class="loading-msg" style="grid-column:1/-1">
+        <div class="spin"></div>
+        Loading live marketplace listings from blockchain…
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 3: RESULTS -->
+  <div id="resultsPanel">
+    <div class="sh">
+      <div class="sh-num">03</div>
+      <div class="sh-text" id="resultsHeading">Analysis Results</div>
+      <div class="sh-line"></div>
+      <button class="btn btn-sm btn-ghost" onclick="clearSelection()">✕ Clear</button>
+    </div>
+
+    <!-- VERDICT -->
+    <div id="verdictBanner" class="verdict" style="background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);margin-bottom:1rem">
+      <div class="verdict-icon" id="verdictIcon">⚡</div>
+      <div>
+        <div class="verdict-title" id="verdictTitle">—</div>
+        <div class="verdict-sub" id="verdictSub">—</div>
+      </div>
+    </div>
+
+    <!-- PRICE COMPARISON -->
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-header">💱 Price vs Mint Cost Comparison</div>
+      <div class="price-compare" id="priceCompare">
+        <div class="pc-col">
+          <div class="pc-label">Listing Price (USD)</div>
+          <div class="pc-val v-amber" id="pc-listing">—</div>
+        </div>
+        <div class="pc-div">vs</div>
+        <div class="pc-col">
+          <div class="pc-label">Mint / Ref Cost</div>
+          <div class="pc-val v-cyan" id="pc-mint">—</div>
+        </div>
+        <div class="pc-div">→</div>
+        <div class="pc-diff" id="pc-diffBox">
+          <div class="pc-label">Premium / Discount</div>
+          <div class="pc-diff-val" id="pc-diff">—</div>
+          <div style="font-size:.65rem;color:var(--dim);margin-top:3px" id="pc-diffPct">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STATS GRID -->
+    <div class="stat-grid" style="margin-bottom:1rem">
+      <div class="stat-box">
+        <div class="stat-label">Daily Earnings (USD)</div>
+        <div class="stat-val v-grn" id="res-dailyUsd">—</div>
+        <div class="stat-sub" id="res-dailyHcash">—</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Monthly Earnings (USD)</div>
+        <div class="stat-val v-grn" id="res-monthlyUsd">—</div>
+        <div class="stat-sub" id="res-monthlyHcash">—</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Daily Elec Cost (USD)</div>
+        <div class="stat-val v-red" id="res-elecUsd">—</div>
+        <div class="stat-sub" id="res-elecHcash">—</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">Break-Even</div>
+        <div class="stat-val v-amber" id="res-breakeven">—</div>
+        <div class="stat-sub" id="res-breakevenSub">days to recover cost</div>
+      </div>
+    </div>
+
+    <!-- BREAKDOWN -->
+    <div class="g2" style="margin-bottom:1rem">
+      <div class="card">
+        <div class="card-header">📊 Earnings Breakdown</div>
+        <table class="bd-table">
+          <tr><td>Hashrate</td><td id="bd-hash" class="v-cyan">—</td></tr>
+          <tr><td>Net Hash Share</td><td id="bd-share" class="v-amber">—</td></tr>
+          <tr><td>Gross hCASH/day</td><td id="bd-gross" class="v-grn">—</td></tr>
+          <tr><td>Electricity (hCASH/day)</td><td id="bd-elecH" class="v-red">—</td></tr>
+          <tr><td>Net hCASH/day</td><td id="bd-net" class="v-amber">—</td></tr>
+          <tr><td>Net USD/day</td><td id="bd-netUsd" class="v-grn">—</td></tr>
+          <tr><td>Net USD/month</td><td id="bd-netMo" class="v-grn">—</td></tr>
+          <tr><td>Net USD/year</td><td id="bd-netYr" class="v-grn">—</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <div class="card-header">⚡ Miner Specs</div>
+        <table class="bd-table">
+          <tr><td>Miner Name</td><td id="bd-name" style="font-family:'Rajdhani';font-size:.85rem;color:var(--txt)">—</td></tr>
+          <tr><td>Type</td><td id="bd-type" class="v-cyan">—</td></tr>
+          <tr><td>Hashrate</td><td id="bd-hashrate2" class="v-amber">—</td></tr>
+          <tr><td>Power Draw</td><td id="bd-power" class="v-red">—</td></tr>
+          <tr><td>Efficiency</td><td id="bd-eff" class="v-grn">—</td></tr>
+          <tr><td>Listing Currency</td><td id="bd-curr" class="v-cyan">—</td></tr>
+          <tr><td>Listing Price</td><td id="bd-listP" class="v-amber">—</td></tr>
+          <tr><td>Price (USD)</td><td id="bd-listUsd" class="v-amber">—</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- BREAK-EVEN PROGRESS -->
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-header">⏱ Break-Even Timeline</div>
+      <div class="tl-bar-wrap">
+        <div class="tl-label">
+          <span>Purchase Day</span>
+          <span id="tl-mid">—</span>
+          <span>1 Year</span>
+        </div>
+        <div class="tl-track">
+          <div class="tl-fill" id="tlFill" style="width:0%"></div>
+        </div>
+      </div>
+      <div style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-top:.6rem">
+        <div style="font-size:.78rem;color:var(--txt2)">At 30 days: <strong style="color:var(--grn)" id="tl-30d">—</strong> recovered</div>
+        <div style="font-size:.78rem;color:var(--txt2)">At 90 days: <strong style="color:var(--grn)" id="tl-90d">—</strong> recovered</div>
+        <div style="font-size:.78rem;color:var(--txt2)">At 1 year: <strong style="color:var(--grn)" id="tl-1yr">—</strong> recovered</div>
+      </div>
+    </div>
+
+  </div><!-- /resultsPanel -->
+
+</main>
+
+<div id="notifArea"></div>
+
+<script>
+// ── CONSTANTS ──
+const HCASH_API     = 'https://api.hashcash.club/api/v1/public';
+const HCASH_API_KEY = 'hc_live_C9jUxh9Knr3Qn-ZEo4SSO-ga0SLjFFjX';
+const DSC_PAIR      = 'https://api.dexscreener.com/latest/dex/pairs/avalanche/';
+const AVAX_RPC      = 'https://api.avax.network/ext/bc/C/rpc';
+const SNOWTRACE     = 'https://api.snowtrace.io/api';
+const WAVAX_ADDR    = '0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7';
+const MAIN_CONTRACT = '0x105fecae0c48d683dA63620De1f2d1582De9e98a';
+const ELEC_SCALE    = 28184891770012.4;
+
+// ── STATE ──
+let priceData = null;   // { price, avaxPrice, ch24, liq, vol24 }
+let _contracts = [];
+let _allListings = [];
+let _selectedListing = null;
+let _facilityData = {
+  1: { lv:1, slots:4,  watts:400,   rate:8.87,  dims:'2×2' },
+  2: { lv:2, slots:6,  watts:1000,  rate:8.87,  dims:'2×3' },
+  3: { lv:3, slots:9,  watts:2000,  rate:8.87,  dims:'3×3' },
+  4: { lv:4, slots:12, watts:4000,  rate:8.87,  dims:'3×4' },
+  5: { lv:5, slots:16, watts:10000, rate:8.87,  dims:'4×4' },
+};
+let _selectedFacLv = 1;
+let _netHashMhs = 0;
+let _dailyEmission = 218750; // 2.5 hCASH/block * 87500 blocks/day
+let _ratesLoaded = false;
+
+// ── HELPERS ──
+const fmtUsd = v => v==null||isNaN(v) ? '—' : '$'+v.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtUsdShort = v => {
+  if(v==null||isNaN(v)) return '—';
+  if(v>=1e6) return '$'+(v/1e6).toFixed(2)+'M';
+  if(v>=1e3) return '$'+(v/1e3).toFixed(1)+'K';
+  return fmtUsd(v);
+};
+const fmtNum = (v,d=2) => v==null||isNaN(v) ? '—' : v.toLocaleString(undefined,{minimumFractionDigits:d,maximumFractionDigits:d});
+const fmtK   = v => { if(!v) return '—'; if(v>=1e6) return '$'+(v/1e6).toFixed(1)+'M'; if(v>=1e3) return '$'+(v/1e3).toFixed(0)+'K'; return '$'+v.toFixed(0); };
+const f4     = v => Number(v).toFixed(4);
+const shortA = a => a ? a.slice(0,6)+'…'+a.slice(-4) : '—';
+
+function notif(msg, type='info', dur=3000) {
+  const el = document.createElement('div');
+  el.className = 'ntf';
+  const cols = {info:'var(--cyan)',warn:'var(--amber)',error:'var(--red)',ok:'var(--grn)'};
+  el.style.borderColor = cols[type]||cols.info;
+  el.style.color = cols[type]||cols.info;
+  el.textContent = msg;
+  document.getElementById('notifArea').prepend(el);
+  setTimeout(()=>el.remove(), dur);
+}
+
+// ── CONTRACTS CACHE ──
+let _contractsCache = null;
+let _contractsCacheTs = 0;
+async function getContracts(maxAge=30000) {
+  if (_contractsCache && Date.now()-_contractsCacheTs < maxAge) return _contractsCache;
+  try {
+    const resp = await fetch(`${HCASH_API}/contracts`, {
+      headers: { 'x-api-key': HCASH_API_KEY },
+      signal: AbortSignal.timeout(8000)
+    }).then(r => r.json());
+    _contractsCache = Array.isArray(resp) ? resp : (resp?.contracts || []);
+    _contractsCacheTs = Date.now();
+    return _contractsCache;
+  } catch(e) {
+    throw e;
+  }
+}
+
+// ── PRICE FETCHING ──
+async function fetchAvaxPrice() {
+  const sources = [
+    async () => {
+      const r = await fetch('https://api.dexscreener.com/tokens/v1/avalanche/0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7', { signal: AbortSignal.timeout(6000) });
+      const d = await r.json();
+      const pairs = Array.isArray(d) ? d : (d?.pairs || []);
+      const p = pairs.find(x => parseFloat(x.priceUsd) > 1);
+      return p ? Number(p.priceUsd) : 0;
+    },
+    async () => {
+      const r = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=AVAXUSDT', { signal: AbortSignal.timeout(6000) });
+      const d = await r.json();
+      return Number(d?.price || 0);
+    },
+    async () => {
+      const r = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=avalanche-2&vs_currencies=usd', { signal: AbortSignal.timeout(7000) });
+      const d = await r.json();
+      return Number(d['avalanche-2']?.usd || 0);
+    },
+    async () => {
+      const r = await fetch(DSC_PAIR+'0xe4cf417081a0ab3f964b44d904bc2b534351a9a7', { signal: AbortSignal.timeout(6000) });
+      const d = await r.json();
+      return Number(d?.pairs?.[0]?.priceUsd || 0);
+    },
+  ];
+  for (const fn of sources) {
+    try {
+      const price = await fn();
+      if (price > 1) {
+        if (!priceData) priceData = { price: 0, avaxPrice: price, ch24: 0, liq: 0, vol24: 0 };
+        else priceData.avaxPrice = price;
+        console.log('[AVAX price]', price.toFixed(2));
+        return price;
+      }
+    } catch(e) { /* try next */ }
+  }
+  return priceData?.avaxPrice || 0;
+}
+
+async function fetchPrices() {
+  try {
+    // hCASH price from DexScreener (hCASH/WAVAX pair)
+    const r = await fetch(DSC_PAIR+'0x8f961980518bc9ab302948de7948580666dc35d9', { signal: AbortSignal.timeout(8000) }).then(x=>x.json());
+    const pair = r?.pairs?.[0];
+    if (pair) {
+      priceData = {
+        price:     parseFloat(pair.priceUsd||0),
+        avaxPrice: priceData?.avaxPrice || 0,
+        ch24:      parseFloat(pair.priceChange?.h24||0),
+        liq:       parseFloat(pair.liquidity?.usd||0),
+        vol24:     parseFloat(pair.volume?.h24||0),
+      };
+    }
+  } catch(e) { console.warn('hCASH price:', e.message); }
+
+  // AVAX price — multi-source
+  await fetchAvaxPrice();
+
+  // Update ticker
+  document.getElementById('tk-hcash').textContent = priceData?.price ? '$'+priceData.price.toFixed(6) : '—';
+  document.getElementById('tk-avax').textContent  = priceData?.avaxPrice ? '$'+priceData.avaxPrice.toFixed(2) : '—';
+  // Re-render market prices if listings already loaded
+  if (_allListings.length) renderMarket();
+}
+
+// ── FACILITY RATES (on-chain) ──
+const AVAX_RPCS = [
+  'https://api.avax.network/ext/bc/C/rpc',
+  'https://avalanche-c-chain-rpc.publicnode.com',
+  'https://rpc.ankr.com/avalanche',
+];
+
+async function getProvider() {
+  for (const rpc of AVAX_RPCS) {
+    try {
+      const p = new ethers.JsonRpcProvider(rpc);
+      await Promise.race([
+        p.getBlockNumber(),
+        new Promise((_,rej) => setTimeout(()=>rej(new Error('rpc timeout')), 5000))
+      ]);
+      console.log('[RPC] Connected:', rpc);
+      return p;
+    } catch(e) { console.warn('[RPC] Failed:', rpc, e.message); }
+  }
+  throw new Error('All RPC endpoints unavailable');
+}
+
+async function fetchFacilityRates() {
+  const MAIN_ABI = [
+    'function facilities(uint256) view returns (uint256 maxMiners, uint256 totalPowerOutput, uint256 cost, bool inProduction, uint256 x, uint256 y, uint256 electricityCost, uint256 cooldown)',
+    'function facilityCount() view returns (uint256)',
+    'function totalHashrate() view returns (uint256)',
+    'function getBigcoinPerBlock() view returns (uint256)',
+    'function blocksUntilNextHalving() view returns (uint256)',
+  ];
+  try {
+    const prov = await getProvider();
+    const game = new ethers.Contract(MAIN_CONTRACT, MAIN_ABI, prov);
+
+    const timeout = ms => new Promise((_,rej) => setTimeout(()=>rej(new Error('timeout')), ms));
+
+    const [hashRaw, bpbRaw, facCountRaw] = await Promise.all([
+      Promise.race([game.totalHashrate(), timeout(8000)]).catch(()=>0n),
+      Promise.race([game.getBigcoinPerBlock(), timeout(8000)]).catch(()=>0n),
+      Promise.race([game.facilityCount(), timeout(8000)]).catch(()=>0n),
+    ]);
+
+    _netHashMhs = Number(hashRaw);
+    const bpb = parseFloat(ethers.formatEther(bpbRaw||0n));
+    if (bpb>0) _dailyEmission = bpb * 87500;
+
+    document.getElementById('tk-nethash').textContent = _netHashMhs > 0 ? (_netHashMhs/1000).toFixed(1)+' GH/s' : '—';
+    document.getElementById('tk-emission').textContent = _dailyEmission > 0 ? fmtNum(_dailyEmission,0)+' hCASH/day' : '—';
+
+    const facCount = Math.min(Number(facCountRaw)||6, 10);
+    const calls = [];
+    for (let i=0; i<facCount; i++) calls.push(Promise.race([game.facilities(i), timeout(8000)]).catch(()=>null));
+    const results = await Promise.all(calls);
+
+    let found = false;
+    for (let i=0; i<results.length; i++) {
+      const fac = results[i];
+      if (!fac) continue;
+      const maxMiners = Number(fac[0]);
+      if (i===0 && maxMiners===0) continue;
+      const lv = i;
+      if (lv<1||lv>5) continue;
+      const watts   = Number(fac[1])*100;
+      const elecRaw = Number(fac[6]);
+      const rate    = elecRaw>0 ? elecRaw/ELEC_SCALE : 0;
+      if (!_facilityData[lv]) _facilityData[lv] = {lv,slots:4,watts:400,rate:8.87};
+      if (maxMiners>0) _facilityData[lv].slots = maxMiners;
+      if (watts>0)     _facilityData[lv].watts = watts;
+      if (rate>0&&rate<100) { _facilityData[lv].rate = parseFloat(rate.toFixed(2)); found=true; }
+    }
+
+    _ratesLoaded = found;
+    document.getElementById('rateSourceBadge').textContent = found ? '⛓ LIVE CHAIN' : '📋 ESTIMATED';
+    document.getElementById('rateSourceBadge').style.color = found ? 'var(--grn)' : 'var(--amber)';
+    renderFacGrid();
+    updateFacDisplay();
+    reCalc();
+  } catch(e) {
+    console.warn('facility rates:', e.message);
+    document.getElementById('rateSourceBadge').textContent = '📋 ESTIMATED';
+    renderFacGrid();
+    updateFacDisplay();
+  }
+}
+
+// ── FACILITY GRID ──
+const FAC_DIMS = {1:'2×2',2:'2×3',3:'3×3',4:'3×4',5:'4×4'};
+function renderFacGrid() {
+  const grid = document.getElementById('facGrid');
+  grid.innerHTML = [1,2,3,4,5].map(lv => {
+    const d = _facilityData[lv]||{lv,slots:4,watts:400,rate:8.87};
+    return `<div class="fac-btn ${_selectedFacLv===lv?'active':''}" onclick="selectFac(${lv})">
+      <div class="fac-lv">Lv${lv}</div>
+      <div class="fac-dim">${FAC_DIMS[lv]||'?'}</div>
+      <div class="fac-stat">${d.slots||'?'} slots</div>
+      <div class="fac-rate">${fmtNum(d.rate,2)}<br><span style="font-size:.55rem;color:var(--dim)">hCASH/kWh</span></div>
+    </div>`;
+  }).join('');
+}
+
+function selectFac(lv) {
+  _selectedFacLv = lv;
+  renderFacGrid();
+  updateFacDisplay();
+  reCalc();
+}
+
+function updateFacDisplay() {
+  const d = _facilityData[_selectedFacLv]||{};
+  document.getElementById('facRateDisplay').textContent = fmtNum(d.rate||0, 2);
+  document.getElementById('facPowerDisplay').textContent = d.watts ? d.watts.toLocaleString() : '—';
+  document.getElementById('facSlotsDisplay').textContent = d.slots||'—';
+}
+
+// ── MARKETPLACE LOADING ──
+async function reloadMarket() {
+  document.getElementById('marketGrid').innerHTML = '<div class="loading-msg" style="grid-column:1/-1"><div class="spin"></div>Fetching listings from blockchain…</div>';
+  try {
+    const contracts = await getContracts(0);
+    const miners = contracts.filter(c => c.category === 'miner_nft');
+    const market = contracts.find(c => c.category === 'marketplace') || null;
+    await loadListings(market, miners, contracts);
+  } catch(e) {
+    const msg = e.message || 'Failed to load marketplace';
+    document.getElementById('marketGrid').innerHTML =
+      '<div class="err-msg" style="grid-column:1/-1">Unable to load: ' + msg +
+      '<br><br><button onclick="reloadMarket()" style="background:rgba(245,158,11,0.1);border:1px solid var(--amber);color:var(--amber);border-radius:6px;padding:6px 14px;cursor:pointer;font-family:Share Tech Mono,monospace;font-size:.7rem">Try Again</button></div>';
+    notif('Load failed: ' + msg, 'error');
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+async function loadListings(marketContract, miners, allContracts) {
+  const MARKETPLACE_ADDR = '0x511FC8b8e5D07a012D17f56fE8bfdE576c8Dd13d';
+  const addr = marketContract?.address || MARKETPLACE_ADDR;
+
+  // Find hCASH game token address from contracts
+  const gameToken = (allContracts||[]).find(c => c.category==='game_token');
+  const hCASH_ADDR = (gameToken?.address || '0xBa5444409257967E5E50b113C395A766B0678C03').toLowerCase();
+
+  const USDC_NATIVE  = '0xb97ef9ef8734c71904d8002f8b6bc66dd9c48a6e';
+  const USDC_BRIDGED = '0xa7d7079b0fead91f3e65f86e8915cb59c1a4c664';
+  const WAVAX_LOWER  = WAVAX_ADDR.toLowerCase();
+
+  // Build minerData map (address → contract record)
+  const minerMap = {};
+  miners.forEach(m => {
+    if (m.address) minerMap[m.address.toLowerCase()] = m;
+  });
+
+  // Pre-register Jarmer Jorn external NFT (not in API — hardcoded)
+  const JARMER_JORN_ADDR = '0x7166e521635fca42a6ba9164c715df641aaa6107';
+  if (!minerMap[JARMER_JORN_ADDR]) {
+    minerMap[JARMER_JORN_ADDR] = {
+      address: JARMER_JORN_ADDR,
+      name: 'Jarmer Jorn',
+      category: 'external_nft',
+      // Fetch image async from on-chain tokenURI — stored back into map and re-renders
+      imageUrl: null,
+      minerStats: null,
+    };
+    // Background fetch — try on-chain tokenURI then re-render market
+    (async () => {
+      try {
+        const rpcs = ['https://avalanche-c-chain-rpc.publicnode.com', 'https://api.avax.network/ext/bc/C/rpc'];
+        let prov = null;
+        for (const rpc of rpcs) {
+          try { prov = new ethers.JsonRpcProvider(rpc); await prov.getBlockNumber(); break; }
+          catch(e) { prov = null; }
+        }
+        if (!prov) return;
+        const nft = new ethers.Contract(JARMER_JORN_ADDR, [
+          'function tokenURI(uint256 tokenId) view returns (string)',
+          'function name() view returns (string)',
+        ], prov);
+        // Try tokenIds 0, 1, 2
+        for (const tid of [1, 0, 2]) {
+          try {
+            const uri = await nft.tokenURI(tid);
+            if (!uri) continue;
+            let imgUrl = null;
+            if (uri.startsWith('data:application/json;base64,')) {
+              const json = JSON.parse(atob(uri.split(',')[1]));
+              imgUrl = json.image;
+            } else if (uri.startsWith('data:application/json,')) {
+              const json = JSON.parse(decodeURIComponent(uri.split(',')[1]));
+              imgUrl = json.image;
+            } else {
+              const fetchUri = uri.startsWith('ipfs://')
+                ? 'https://ipfs.io/ipfs/' + uri.slice(7)
+                : uri;
+              const meta = await fetch(fetchUri, { signal: AbortSignal.timeout(6000) }).then(r=>r.json()).catch(()=>null);
+              if (meta?.image) {
+                imgUrl = meta.image.startsWith('ipfs://')
+                  ? 'https://ipfs.io/ipfs/' + meta.image.slice(7)
+                  : meta.image;
+              }
+            }
+            if (imgUrl) {
+              minerMap[JARMER_JORN_ADDR].imageUrl = imgUrl;
+              // Re-render market to show the image
+              if (_allListings.length) renderMarket();
+              break;
+            }
+          } catch(e2) { /* try next tokenId */ }
+        }
+      } catch(e) { console.warn('Jarmer Jorn image fetch:', e.message); }
+    })();
+  }
+
+  // Known hCASH token addresses (multiple possible)
+  const HCASH_ADDRS = new Set([
+    '0xba5444409257967e5e50b113c395a766b0678c03', // cashmoat confirmed hCASH
+    '0x297731eb3cab3834525fc9ea061fd71d8f4645c9', // known fallback
+    hCASH_ADDR,                                   // from API
+  ].filter(Boolean));
+
+  // AVAX addresses — ThirdWeb MarketplaceV3 uses 0xEeee...EEeE for native token
+  const AVAX_ADDRS = new Set([
+    WAVAX_LOWER,                                                    // WAVAX ERC20
+    '0x0000000000000000000000000000000000000000',                   // zero address (native)
+    '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',                   // ThirdWeb native token sentinel
+    '0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7',                   // WAVAX explicit lowercase
+  ]);
+
+  function parseCurrency(rawWei, currencyAddr) {
+    const ca = (currencyAddr||'').toLowerCase();
+    let raw;
+    try { raw = Number(ethers.formatEther(BigInt(rawWei)||0n)); }
+    catch(e) { raw = Number(rawWei) / 1e18; }
+
+    // AVAX — check first since ThirdWeb uses special sentinel address
+    if (AVAX_ADDRS.has(ca)) {
+      console.log('[parseCurrency] AVAX listing:', currencyAddr, raw, 'AVAX');
+      return { priceHcash:0, priceAvax:raw, priceUsdc:0, label:'AVAX' };
+    }
+    // hCASH — match against all known addresses
+    if (HCASH_ADDRS.has(ca)) return { priceHcash: raw, priceAvax:0, priceUsdc:0, label:'hCASH' };
+    // USDC — 6 decimals
+    if (ca===USDC_NATIVE||ca===USDC_BRIDGED) {
+      let usdcRaw;
+      try { usdcRaw = Number(ethers.formatUnits(BigInt(rawWei)||0n, 6)); } catch(e) { usdcRaw = raw; }
+      return { priceHcash:0, priceAvax:0, priceUsdc:usdcRaw, label:'USDC' };
+    }
+    // Unknown — log the address so we can identify it
+    console.warn('[parseCurrency] UNKNOWN currency:', currencyAddr, 'raw:', raw, '— defaulting to hCASH. Add this address to HCASH_ADDRS or AVAX_ADDRS if wrong.');
+    return { priceHcash: raw, priceAvax:0, priceUsdc:0, label:'hCASH' };
+  }
+
+  const MKT_ABI = [
+    'function getAllValidListings(uint256 startId, uint256 endId) view returns (tuple(uint256 listingId, uint256 tokenId, uint256 quantity, uint256 pricePerToken, uint128 startTimestamp, uint128 endTimestamp, address listingCreator, address assetContract, address currency, uint8 tokenType, uint8 status, bool reserved)[])',
+    'function getAllListings(uint256 startId, uint256 endId) view returns (tuple(uint256 listingId, uint256 tokenId, uint256 quantity, uint256 pricePerToken, uint128 startTimestamp, uint128 endTimestamp, address listingCreator, address assetContract, address currency, uint8 tokenType, uint8 status, bool reserved)[])',
+    'function totalListings() view returns (uint256)',
+  ];
+
+  const listings = [];
+  const timeout = ms => new Promise((_,rej) => setTimeout(()=>rej(new Error('rpc timeout')), ms));
+
+  function processListing(l, now) {
+    const status = Number(l.status||0);
+    const endTs  = Number(l.endTimestamp||0);
+    if (status !== 1) return;                    // only active
+    if (endTs > 0 && endTs < now) return;        // skip expired
+    const cp = parseCurrency(l.pricePerToken||0n, l.currency);
+    const assetAddr = (l.assetContract||'').toLowerCase();
+    const miner = minerMap[assetAddr];
+    const ms = miner?.minerStats;
+    listings.push({
+      listingId:     Number(l.listingId||0),
+      tokenId:       Number(l.tokenId||0),
+      seller:        (l.listingCreator||'').toLowerCase(),
+      nftContract:   assetAddr,
+      minerName:     miner?.name || `Miner #${Number(l.tokenId||0)}`,
+      minerImg:      miner?.imageUrl || null,
+      minerStats:    ms || null,
+      minerRef:      miner || null,
+      priceHcash:    cp.priceHcash,
+      priceAvax:     cp.priceAvax,
+      priceUsdc:     cp.priceUsdc,
+      currencyLabel: cp.label,
+      currencyAddr:  (l.currency||'').toLowerCase(),
+    });
+  }
+
+  // Strategy 1: direct on-chain call via RPC — batched in chunks of 500
+  let chainSuccess = false;
+  try {
+    const prov = await Promise.race([getProvider(), timeout(15000)]);
+    const mkt  = new ethers.Contract(ethers.getAddress(addr), MKT_ABI, prov);
+    const now  = Math.floor(Date.now() / 1000);
+
+    let total = 0;
+    try { total = Number(await Promise.race([mkt.totalListings(), timeout(5000)])); }
+    catch(e) { console.warn('[MKT] totalListings unavailable, trying 0-500'); total = 500; }
+
+    if (total > 0) {
+      const BATCH = 500;
+      for (let start = 0; start < total; start += BATCH) {
+        const end = Math.min(start + BATCH - 1, total - 1);
+        let batch = null;
+        try { batch = await Promise.race([mkt.getAllValidListings(start, end), timeout(20000)]); }
+        catch(e) {
+          console.warn('[MKT] getAllValidListings failed:', e.message, '— trying getAllListings');
+          try { batch = await Promise.race([mkt.getAllListings(start, end), timeout(20000)]); }
+          catch(e2) {}
+        }
+        if (!batch || !batch.length) continue;
+        for (const l of batch) processListing(l, now);
+      }
+      if (listings.length > 0) chainSuccess = true;
+    }
+    console.log('[MKT] on-chain returned', listings.length, 'active listings');
+  } catch(e) {
+    console.warn('[MKT] On-chain strategy failed:', e.message);
+  }
+
+  // Strategy 2: Snowtrace event logs fallback
+  if (!chainSuccess || listings.length === 0) {
+    console.log('[MKT] Trying Snowtrace logs fallback…');
+    try {
+      // NewListing event topic
+      const topic = '0xef309e3999c4dd6a4c1e4af6221896b7e5ccf9e7fc4fe5b218b883ce9190d7ad';
+      const logsRes = await fetch(
+        `${SNOWTRACE}?module=logs&action=getLogs&address=${addr}&topic0=${topic}&fromBlock=0&toBlock=99999999&offset=500`
+      ).then(r=>r.json()).catch(()=>null);
+
+      const logs = (logsRes?.status === '1') ? (logsRes.result || []) : [];
+      console.log('[MKT] Snowtrace logs returned', logs.length);
+      const now = Math.floor(Date.now() / 1000);
+
+      for (const log of logs) {
+        try {
+          const creator       = log.topics[1] ? '0x'+log.topics[1].slice(26).toLowerCase() : '';
+          const listingId     = log.topics[2] ? Number(BigInt(log.topics[2])) : 0;
+          const assetContract = log.topics[3] ? '0x'+log.topics[3].slice(26).toLowerCase() : '';
+          const data = (log.data||'').replace('0x','');
+          if (data.length < 384) continue;
+          const words = [];
+          for (let i = 0; i < data.length; i += 64) words.push(data.slice(i, i+64));
+          const wOff = words[0] === '0000000000000000000000000000000000000000000000000000000000000020' ? 1 : 0;
+          const w = words.slice(wOff);
+          if (w.length < 12) continue;
+          const tokenId       = Number(BigInt('0x'+w[1]));
+          const pricePerToken = BigInt('0x'+w[3]);
+          const startTs       = Number(BigInt('0x'+w[4]));
+          const endTs         = Number(BigInt('0x'+w[5]));
+          const currency      = '0x'+w[8].slice(24);
+          const status        = Number(BigInt('0x'+w[10]));
+          if (status !== 1) continue;
+          if (endTs > 0 && endTs < now) continue;
+          if (startTs > now + 31536000) continue;
+          if (listings.find(x=>x.listingId===listingId)) continue;
+          const cp    = parseCurrency(pricePerToken, currency);
+          const miner = minerMap[assetContract];
+          const ms    = miner?.minerStats;
+          listings.push({
+            listingId, seller: creator,
+            nftContract: assetContract,
+            tokenId,
+            minerName:  miner?.name || `Miner #${tokenId}`,
+            minerImg:   miner?.imageUrl || null,
+            minerStats: ms || null,
+            minerRef:   miner || null,
+            priceHcash: cp.priceHcash, priceAvax: cp.priceAvax, priceUsdc: cp.priceUsdc,
+            currencyLabel: cp.label, currencyAddr: currency.toLowerCase(),
+          });
+        } catch(e2) { /* skip malformed log */ }
+      }
+    } catch(e) { console.warn('[MKT] Snowtrace fallback failed:', e.message); }
+  }
+
+  // If still nothing, show miners from contracts as "not listed" placeholders
+  if (listings.length === 0) {
+    console.log('[MKT] No listings found — showing miner catalog from API');
+    // Show a note and render the miner catalog so the app is still useful
+    document.getElementById('marketGrid').innerHTML = `
+      <div style="grid-column:1/-1;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.2);border-radius:10px;padding:1.2rem;font-family:'Share Tech Mono',monospace;font-size:.72rem;color:var(--amber);margin-bottom:.5rem">
+        ⚠ Could not reach marketplace contract. Network may be slow — try <button onclick="reloadMarket()" style="background:none;border:1px solid var(--amber);color:var(--amber);border-radius:4px;padding:2px 8px;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:.7rem">↺ Refresh</button>
+      </div>`;
+    return;
+  }
+
+  _allListings = listings;
+
+  // Patch Jarmer Jorn listings that didn't resolve name/image from minerMap
+  listings.forEach(l => {
+    if ((l.nftContract||'') === JARMER_JORN_ADDR) {
+      if (!l.minerName || l.minerName.startsWith('Miner #')) l.minerName = 'Jarmer Jorn';
+      if (!l.minerImg && minerMap[JARMER_JORN_ADDR]?.imageUrl) l.minerImg = minerMap[JARMER_JORN_ADDR].imageUrl;
+    }
+  });
+
+  document.getElementById('tk-listings').textContent = listings.length + ' active';
+  notif(`Loaded ${listings.length} marketplace listings ✓`, 'ok');
+  renderMarket();
+}
+
+// ── RENDER MARKET ──
+function getListingUsd(l) {
+  const hp = priceData?.price||0;
+  const ap = priceData?.avaxPrice||0;
+  if (l.priceHcash>0) return l.priceHcash*hp;
+  if (l.priceAvax>0)  return l.priceAvax*ap;
+  if (l.priceUsdc>0)  return l.priceUsdc;
+  return 0;
+}
+
+function getHashrateMhs(listing) {
+  return listing.minerStats?.hashrateMhps || 0;
+}
+
+function getDailyNetUsd(listing) {
+  const fac = _facilityData[_selectedFacLv]||{};
+  const rate = fac.rate||8.87;
+  const hp   = priceData?.price||0;
+  const ap   = priceData?.avaxPrice||0;
+  const mhs  = getHashrateMhs(listing);
+  const watts= listing.minerStats ? (Number(listing.minerStats.powerRaw||0)/1e9 * 100) : 0; // try to decode
+  // Simpler: use powerWatts if available
+  const pw   = listing.minerStats?.powerWatts || (Number(listing.minerStats?.powerRaw||0)/1e10) || 0;
+
+  if (!mhs || !_netHashMhs) return null;
+  const share = mhs / (_netHashMhs + mhs); // miner's share
+  const grossHcash = _dailyEmission * share;
+  const kwhDay = (pw / 1000) * 24;
+  const elecHcash = kwhDay * rate;
+  const netHcash = grossHcash - elecHcash;
+  return { netHcash, netUsd: netHcash * hp, grossHcash, elecHcash, kwhDay, rate, pw, mhs, share };
+}
+
+function renderMarket() {
+  const q = (document.getElementById('mktSearch').value||'').toLowerCase();
+  const sort = document.getElementById('sortBy').value;
+  const curr = document.getElementById('currencyFilter').value;
+
+  let listings = [..._allListings];
+  if (q) listings = listings.filter(l=>(l.minerName||'').toLowerCase().includes(q)||String(l.tokenId).includes(q));
+  if (curr==='hcash') listings = listings.filter(l=>l.priceHcash>0);
+  if (curr==='avax')  listings = listings.filter(l=>l.priceAvax>0);
+
+  listings.sort((a,b)=>{
+    if (sort==='price-asc')  return getListingUsd(a)-getListingUsd(b);
+    if (sort==='price-desc') return getListingUsd(b)-getListingUsd(a);
+    if (sort==='hash-desc')  return getHashrateMhs(b)-getHashrateMhs(a);
+    if (sort==='roi') {
+      const ea = getDailyNetUsd(a)?.netUsd||0;
+      const eb = getDailyNetUsd(b)?.netUsd||0;
+      const ua = getListingUsd(a)||1;
+      const ub = getListingUsd(b)||1;
+      return (eb/ub)-(ea/ua);
+    }
+    return 0;
+  });
+
+  if (!listings.length) {
+    document.getElementById('marketGrid').innerHTML = `<div class="loading-msg" style="grid-column:1/-1">No listings found for this filter.</div>`;
+    return;
+  }
+
+  const hp = priceData?.price||0;
+  const ap = priceData?.avaxPrice||0;
+
+  document.getElementById('marketGrid').innerHTML = listings.map(l => {
+    const priceUsd = getListingUsd(l);
+    const daily    = getDailyNetUsd(l);
+    const netUsdDay = daily?.netUsd || 0;
+
+    // Badge logic — compare to mint ref cost
+    const mintCostHcash = Number(l.minerRef?.price || l.minerRef?.priceHcash || 0);
+    const mintCostAvax  = Number(l.minerRef?.priceAvax || 0);
+    const mintUsd = mintCostHcash > 0 ? mintCostHcash*hp : (mintCostAvax > 0 ? mintCostAvax*ap : 0);
+    let badge = '';
+    if (priceUsd > 0 && mintUsd > 0 && mintUsd < 99999*hp) {
+      const pct = (priceUsd-mintUsd)/mintUsd*100;
+      if (pct < -5)  badge = `<div class="listing-badge badge-deal">▼ DEAL ${Math.abs(pct).toFixed(0)}%</div>`;
+      else if (pct > 15) badge = `<div class="listing-badge badge-over">▲ +${pct.toFixed(0)}%</div>`;
+      else badge = `<div class="listing-badge badge-fair">≈ FAIR</div>`;
+    } else if (netUsdDay > 0.01) {
+      badge = `<div class="listing-badge badge-deal">+${fmtUsd(netUsdDay)}/d</div>`;
+    }
+
+    const priceHtml = l.priceHcash > 0
+      ? `<div class="listing-price hcash">${l.priceHcash.toLocaleString(undefined,{maximumFractionDigits:0})} hCASH</div>`
+      : l.priceAvax > 0
+        ? `<div class="listing-price avax">${f4(l.priceAvax)} AVAX</div>`
+        : `<div class="listing-price usdc">$${fmtNum(l.priceUsdc,2)} USDC</div>`;
+
+    const imgSrc = l.minerImg || (l.nftContract === JARMER_JORN_ADDR ? null : null);
+    const imgHtml = imgSrc
+      ? `<img class="listing-img" src="${imgSrc}" alt="" loading="lazy"
+           onerror="const gateways=['https://cloudflare-ipfs.com/ipfs/','https://gateway.pinata.cloud/ipfs/','https://ipfs.io/ipfs/'];
+             const s=this.src; const ipfsHash=s.includes('/ipfs/')?s.split('/ipfs/')[1]:null;
+             if(ipfsHash){const ng=gateways.find(g=>!s.startsWith(g));if(ng){this.src=ng+ipfsHash;return;}}
+             this.style.display='none';this.nextElementSibling.style.display='flex'">
+         <div class="listing-img-placeholder" style="display:none">⛏</div>`
+      : `<div class="listing-img-placeholder">⛏</div>`;
+
+    const ms = l.minerStats;
+    const statsHtml = ms
+      ? `<div class="listing-stats">${ms.hashrateFormatted||'?'} · ${ms.powerFormatted||'?'}</div>`
+      : `<div class="listing-stats" style="color:var(--mut)">No stats</div>`;
+
+    const selected = _selectedListing?.listingId===l.listingId&&_selectedListing?.tokenId===l.tokenId;
+    const idx = _allListings.findIndex(x => x.listingId===l.listingId && x.tokenId===l.tokenId);
+
+    return `<div class="listing-card ${selected?'selected':''}" onclick="selectListingByIdx(${idx})">
+      ${badge}
+      ${imgHtml}
+      <div class="listing-name" title="${l.minerName}">${l.minerName}</div>
+      ${priceHtml}
+      ${priceUsd>0?`<div style="font-size:.65rem;color:var(--dim)">≈ ${fmtUsd(priceUsd)}</div>`:''}
+      ${statsHtml}
+    </div>`;
+  }).join('');
+}
+
+// ── SELECT LISTING & CALCULATE ──
+function selectListingByIdx(idx) {
+  const l = _allListings[idx];
+  if (!l) return;
+  _selectedListing = l;
+  renderMarket();
+  reCalc();
+  document.getElementById('resultsPanel').style.display = 'block';
+  setTimeout(()=>document.getElementById('resultsPanel').scrollIntoView({behavior:'smooth',block:'start'}), 80);
+}
+
+function selectListing(jsonStr) {
+  try { _selectedListing = JSON.parse(jsonStr); }
+  catch(e) { return; }
+  renderMarket();
+  reCalc();
+  document.getElementById('resultsPanel').style.display = 'block';
+  setTimeout(()=>document.getElementById('resultsPanel').scrollIntoView({behavior:'smooth',block:'start'}), 80);
+}
+
+function clearSelection() {
+  _selectedListing = null;
+  document.getElementById('resultsPanel').style.display = 'none';
+  renderMarket();
+}
+
+function reCalc() {
+  if (!_selectedListing) return;
+  const l  = _selectedListing;
+  const ms = l.minerStats;
+  const fac = _facilityData[_selectedFacLv]||{};
+
+  const hp  = priceData?.price||0;
+  const ap  = priceData?.avaxPrice||0;
+
+  // Listing price in USD
+  const listingUsd = getListingUsd(l);
+
+  // Hashrate
+  const mhs = ms?.hashrateMhps || 0;
+
+  // Power
+  const pw = ms?.powerWatts || (ms?.powerRaw ? Number(ms.powerRaw)/1e10 : 0);
+
+  // Facility electricity rate
+  const rate = fac.rate || 8.87;
+
+  // Daily earnings calc
+  const calc = getDailyNetUsd(l);
+  const netHcashDay  = calc?.netHcash  || 0;
+  const netUsdDay    = calc?.netUsd    || 0;
+  const grossHcashDay = calc?.grossHcash || 0;
+  const elecHcashDay  = calc?.elecHcash || 0;
+  const share         = calc?.share     || 0;
+
+  const netUsdMonth = netUsdDay * 30;
+  const netUsdYear  = netUsdDay * 365;
+
+  // Break-even
+  const breakeven = (netUsdDay > 0 && listingUsd > 0) ? Math.ceil(listingUsd / netUsdDay) : null;
+
+  // Mint ref cost (from contract data — often 99999 means "not for direct sale")
+  const mintHcash = Number(l.minerRef?.price || 0);
+  const mintAvax  = Number(l.minerRef?.priceAvax || 0);
+  const mintUsd   = mintHcash > 0 && mintHcash < 99999 ? mintHcash*hp
+                  : mintAvax  > 0 && mintAvax  < 99999 ? mintAvax*ap : 0;
+  const priceDiff = (mintUsd > 0 && listingUsd > 0) ? listingUsd - mintUsd : null;
+  const pricePct  = (mintUsd > 0 && priceDiff != null) ? (priceDiff/mintUsd*100) : null;
+
+  // ── UPDATE UI ──
+  document.getElementById('resultsHeading').textContent = `Analysis: ${l.minerName}`;
+
+  // Verdict
+  const vIcon  = document.getElementById('verdictIcon');
+  const vTitle = document.getElementById('verdictTitle');
+  const vSub   = document.getElementById('verdictSub');
+  const vBan   = document.getElementById('verdictBanner');
+
+  if (!mhs) {
+    vIcon.textContent='⚠️'; vTitle.textContent='No Hashrate Data Available';
+    vSub.textContent='This miner has no on-chain hashrate stats. Verify with the seller.';
+    vBan.style.cssText='background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.25);border-radius:12px;padding:1rem 1.2rem;display:flex;align-items:flex-start;gap:14px;margin-bottom:1rem';
+  } else if (netUsdDay <= 0) {
+    vIcon.textContent='⛔'; vTitle.textContent='UNPROFITABLE — Electricity Exceeds Earnings';
+    vSub.textContent=`At Facility Lv${_selectedFacLv} (${fmtNum(rate,2)} hCASH/kWh), electricity cost wipes out all earnings. Consider a higher facility or avoid this miner.`;
+    vBan.style.cssText='background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.3);border-radius:12px;padding:1rem 1.2rem;display:flex;align-items:flex-start;gap:14px;margin-bottom:1rem';
+    vTitle.style.color='var(--red)';
+  } else if (breakeven && breakeven < 90) {
+    vIcon.textContent='🚀'; vTitle.textContent=`STRONG BUY — ${breakeven}d Break-Even`;
+    vSub.textContent=`Fast ROI. Nets ${fmtUsd(netUsdDay)}/day (${fmtUsd(netUsdMonth)}/mo). Cost recovered in ~${breakeven} days at current hCASH price.`;
+    vBan.style.cssText='background:rgba(74,222,128,0.07);border:1px solid rgba(74,222,128,0.3);border-radius:12px;padding:1rem 1.2rem;display:flex;align-items:flex-start;gap:14px;margin-bottom:1rem';
+    vTitle.style.color='var(--grn)';
+  } else if (breakeven && breakeven < 365) {
+    vIcon.textContent='⛏'; vTitle.textContent=`VIABLE — ${breakeven}d Break-Even`;
+    vSub.textContent=`Profitable but slower return. Nets ${fmtUsd(netUsdDay)}/day. Recovered in ~${breakeven} days. Price drop risk is moderate.`;
+    vBan.style.cssText='background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.3);border-radius:12px;padding:1rem 1.2rem;display:flex;align-items:flex-start;gap:14px;margin-bottom:1rem';
+    vTitle.style.color='var(--amber)';
+  } else {
+    vIcon.textContent='⏳'; vTitle.textContent=`LONG ROI — ${breakeven ? breakeven+'d' : '1yr+'} Break-Even`;
+    vSub.textContent=`Very slow payback. Nets ${fmtUsd(netUsdDay)}/day. Needs ${breakeven ? breakeven+' days' : 'over a year'} to recover cost. High price-drop risk.`;
+    vBan.style.cssText='background:rgba(167,139,250,0.07);border:1px solid rgba(167,139,250,0.3);border-radius:12px;padding:1rem 1.2rem;display:flex;align-items:flex-start;gap:14px;margin-bottom:1rem';
+    vTitle.style.color='var(--pur)';
+  }
+
+  // Price comparison
+  const pcDiff = document.getElementById('pc-diffBox');
+  document.getElementById('pc-listing').textContent = listingUsd > 0 ? fmtUsd(listingUsd) : '—';
+  document.getElementById('pc-mint').textContent = mintUsd > 0 ? fmtUsd(mintUsd) : 'N/A (gated)';
+  if (priceDiff != null) {
+    document.getElementById('pc-diff').textContent = (priceDiff >= 0 ? '+' : '') + fmtUsd(priceDiff);
+    document.getElementById('pc-diff').style.color = priceDiff > 0 ? 'var(--red)' : 'var(--grn)';
+    document.getElementById('pc-diffPct').textContent = (pricePct >= 0 ? '+' : '') + fmtNum(pricePct,1) + '% vs mint cost';
+    pcDiff.className = 'pc-diff' + (priceDiff > 0 ? ' over' : '');
+  } else {
+    document.getElementById('pc-diff').textContent = 'N/A';
+    document.getElementById('pc-diffPct').textContent = 'Mint price not available';
+  }
+
+  // Stats
+  const fmtHcash = v => fmtNum(v,2) + ' hCASH';
+  document.getElementById('res-dailyUsd').textContent   = fmtUsd(netUsdDay);
+  document.getElementById('res-dailyHcash').textContent = fmtHcash(netHcashDay) + '/day';
+  document.getElementById('res-monthlyUsd').textContent  = fmtUsd(netUsdMonth);
+  document.getElementById('res-monthlyHcash').textContent= fmtHcash(netHcashDay*30) + '/month';
+  document.getElementById('res-elecUsd').textContent    = fmtUsd(elecHcashDay * hp);
+  document.getElementById('res-elecHcash').textContent  = fmtHcash(elecHcashDay) + '/day';
+  document.getElementById('res-breakeven').textContent  = breakeven ? breakeven+'d' : (netUsdDay <= 0 ? '∞' : '—');
+
+  // Breakdown
+  document.getElementById('bd-hash').textContent     = mhs ? fmtNum(mhs,2)+' MH/s' : '—';
+  document.getElementById('bd-share').textContent    = share ? (share*100).toFixed(4)+'%' : '—';
+  document.getElementById('bd-gross').textContent    = fmtHcash(grossHcashDay);
+  document.getElementById('bd-elecH').textContent    = fmtHcash(elecHcashDay);
+  document.getElementById('bd-net').textContent      = fmtHcash(netHcashDay);
+  document.getElementById('bd-netUsd').textContent   = fmtUsd(netUsdDay);
+  document.getElementById('bd-netMo').textContent    = fmtUsd(netUsdMonth);
+  document.getElementById('bd-netYr').textContent    = fmtUsd(netUsdYear);
+
+  document.getElementById('bd-name').textContent     = l.minerName;
+  document.getElementById('bd-type').textContent     = ms ? (l.minerRef?.name || 'NFT Miner') : '—';
+  document.getElementById('bd-hashrate2').textContent= ms?.hashrateFormatted || (mhs ? mhs+' MH/s' : '—');
+  document.getElementById('bd-power').textContent    = ms?.powerFormatted || (pw ? pw+'W' : '—');
+  const eff = (mhs > 0 && pw > 0) ? (mhs / (pw/1000)).toFixed(1) : null;
+  document.getElementById('bd-eff').textContent      = eff ? eff+' MH/W' : '—';
+  document.getElementById('bd-curr').textContent     = l.currencyLabel;
+  document.getElementById('bd-listP').textContent    = l.priceHcash > 0 ? fmtNum(l.priceHcash,0)+' hCASH'
+    : l.priceAvax > 0 ? f4(l.priceAvax)+' AVAX'
+    : l.priceUsdc > 0 ? '$'+fmtNum(l.priceUsdc,2)+' USDC' : '—';
+  document.getElementById('bd-listUsd').textContent  = fmtUsd(listingUsd);
+
+  // Timeline
+  const tlPct = breakeven ? Math.min(100, (365/breakeven)*100) : 0;
+  document.getElementById('tlFill').style.width = tlPct+'%';
+  document.getElementById('tl-mid').textContent = breakeven ? `Break-even at ${breakeven}d` : 'No break-even';
+  document.getElementById('tl-30d').textContent  = fmtUsd(netUsdDay*30);
+  document.getElementById('tl-90d').textContent  = fmtUsd(netUsdDay*90);
+  document.getElementById('tl-1yr').textContent  = fmtUsd(netUsdYear);
+}
+
+// ── INIT ──
+async function init() {
+  renderFacGrid();
+  updateFacDisplay();
+
+  // Fetch prices and contracts in parallel — don't block each other
+  fetchPrices().catch(e => console.warn('prices:', e.message));
+  fetchFacilityRates().catch(e => console.warn('facility rates:', e.message));
+
+  try {
+    const contracts = await getContracts();
+    const miners    = contracts.filter(c => c.category === 'miner_nft');
+    const market    = contracts.find(c => c.category === 'marketplace') || null;
+    await loadListings(market, miners, contracts);
+  } catch(e) {
+    const msg = e.message || 'Unknown error';
+    document.getElementById('marketGrid').innerHTML =
+      '<div class="err-msg" style="grid-column:1/-1">Failed to load contracts: ' + msg +
+      '<br><br><button onclick="reloadMarket()" style="background:rgba(245,158,11,0.1);border:1px solid var(--amber);color:var(--amber);border-radius:6px;padding:6px 14px;cursor:pointer;font-family:Share Tech Mono,monospace;font-size:.7rem">↺ Retry</button></div>';
+  }
+
+  setInterval(fetchPrices, 60000);
+}
+
+init();
+</script>
+</body>
+</html>
