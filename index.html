@@ -1124,61 +1124,38 @@ async function loadListings(marketContract, miners, allContracts) {
     if (m.address) minerMap[m.address.toLowerCase()] = m;
   });
 
-  // Pre-register Jarmer Jorn external NFT (not in API — hardcoded)
+  // Pre-register Jarmer Jorn external NFT (not in API — resolved directly)
   const JARMER_JORN_ADDR = '0x7166e521635fca42a6ba9164c715df641aaa6107';
   if (!minerMap[JARMER_JORN_ADDR]) {
     minerMap[JARMER_JORN_ADDR] = {
       address: JARMER_JORN_ADDR,
       name: 'Jarmer Jorn',
       category: 'external_nft',
-      // Fetch image async from on-chain tokenURI — stored back into map and re-renders
-      imageUrl: null,
+      imageUrl: null, // will be fetched on-chain
       minerStats: null,
     };
-    // Background fetch — try on-chain tokenURI then re-render market
+    // Fetch the NFT image from on-chain tokenURI
     (async () => {
       try {
-        const rpcs = ['https://avalanche-c-chain-rpc.publicnode.com', 'https://api.avax.network/ext/bc/C/rpc'];
-        let prov = null;
-        for (const rpc of rpcs) {
-          try { prov = new ethers.JsonRpcProvider(rpc); await prov.getBlockNumber(); break; }
-          catch(e) { prov = null; }
-        }
-        if (!prov) return;
+        const prov = new ethers.JsonRpcProvider(AVAX_RPC);
         const nft = new ethers.Contract(JARMER_JORN_ADDR, [
           'function tokenURI(uint256 tokenId) view returns (string)',
-          'function name() view returns (string)',
         ], prov);
-        // Try tokenIds 0, 1, 2
-        for (const tid of [1, 0, 2]) {
-          try {
-            const uri = await nft.tokenURI(tid);
-            if (!uri) continue;
-            let imgUrl = null;
-            if (uri.startsWith('data:application/json;base64,')) {
-              const json = JSON.parse(atob(uri.split(',')[1]));
-              imgUrl = json.image;
-            } else if (uri.startsWith('data:application/json,')) {
-              const json = JSON.parse(decodeURIComponent(uri.split(',')[1]));
-              imgUrl = json.image;
-            } else {
-              const fetchUri = uri.startsWith('ipfs://')
-                ? 'https://ipfs.io/ipfs/' + uri.slice(7)
-                : uri;
-              const meta = await fetch(fetchUri, { signal: AbortSignal.timeout(6000) }).then(r=>r.json()).catch(()=>null);
-              if (meta?.image) {
-                imgUrl = meta.image.startsWith('ipfs://')
-                  ? 'https://ipfs.io/ipfs/' + meta.image.slice(7)
-                  : meta.image;
-              }
-            }
-            if (imgUrl) {
-              minerMap[JARMER_JORN_ADDR].imageUrl = imgUrl;
-              // Re-render market to show the image
-              if (_allListings.length) renderMarket();
-              break;
-            }
-          } catch(e2) { /* try next tokenId */ }
+        // Try tokenId 1 first
+        let uri = await nft.tokenURI(1).catch(() => null);
+        if (!uri) uri = await nft.tokenURI(0).catch(() => null);
+        if (uri) {
+          if (uri.startsWith('data:application/json;base64,')) {
+            const json = JSON.parse(atob(uri.split(',')[1]));
+            minerMap[JARMER_JORN_ADDR].imageUrl = json.image || null;
+          } else if (uri.startsWith('http')) {
+            const meta = await fetch(uri, { signal: AbortSignal.timeout(5000) }).then(r=>r.json()).catch(()=>null);
+            if (meta?.image) minerMap[JARMER_JORN_ADDR].imageUrl = meta.image;
+          } else if (uri.startsWith('ipfs://')) {
+            const gateway = 'https://ipfs.io/ipfs/' + uri.slice(7);
+            const meta = await fetch(gateway, { signal: AbortSignal.timeout(5000) }).then(r=>r.json()).catch(()=>null);
+            if (meta?.image) minerMap[JARMER_JORN_ADDR].imageUrl = meta.image.replace('ipfs://', 'https://ipfs.io/ipfs/');
+          }
         }
       } catch(e) { console.warn('Jarmer Jorn image fetch:', e.message); }
     })();
@@ -1186,18 +1163,10 @@ async function loadListings(marketContract, miners, allContracts) {
 
   // Known hCASH token addresses (multiple possible)
   const HCASH_ADDRS = new Set([
-    '0xba5444409257967e5e50b113c395a766b0678c03', // cashmoat confirmed hCASH
-    '0x297731eb3cab3834525fc9ea061fd71d8f4645c9', // known fallback
+    '0xba5444409257967e5e50b113c395a766b0678c03', // cashmoat known
+    '0x297731eb3cab3834525fc9ea061fd71d8f4645c9', // fallback known
     hCASH_ADDR,                                   // from API
   ].filter(Boolean));
-
-  // AVAX addresses — ThirdWeb MarketplaceV3 uses 0xEeee...EEeE for native token
-  const AVAX_ADDRS = new Set([
-    WAVAX_LOWER,                                                    // WAVAX ERC20
-    '0x0000000000000000000000000000000000000000',                   // zero address (native)
-    '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',                   // ThirdWeb native token sentinel
-    '0xb31f66aa3c1e785363f0875a1b74e27b85fd66c7',                   // WAVAX explicit lowercase
-  ]);
 
   function parseCurrency(rawWei, currencyAddr) {
     const ca = (currencyAddr||'').toLowerCase();
@@ -1205,11 +1174,6 @@ async function loadListings(marketContract, miners, allContracts) {
     try { raw = Number(ethers.formatEther(BigInt(rawWei)||0n)); }
     catch(e) { raw = Number(rawWei) / 1e18; }
 
-    // AVAX — check first since ThirdWeb uses special sentinel address
-    if (AVAX_ADDRS.has(ca)) {
-      console.log('[parseCurrency] AVAX listing:', currencyAddr, raw, 'AVAX');
-      return { priceHcash:0, priceAvax:raw, priceUsdc:0, label:'AVAX' };
-    }
     // hCASH — match against all known addresses
     if (HCASH_ADDRS.has(ca)) return { priceHcash: raw, priceAvax:0, priceUsdc:0, label:'hCASH' };
     // USDC — 6 decimals
@@ -1218,8 +1182,11 @@ async function loadListings(marketContract, miners, allContracts) {
       try { usdcRaw = Number(ethers.formatUnits(BigInt(rawWei)||0n, 6)); } catch(e) { usdcRaw = raw; }
       return { priceHcash:0, priceAvax:0, priceUsdc:usdcRaw, label:'USDC' };
     }
-    // Unknown — log the address so we can identify it
-    console.warn('[parseCurrency] UNKNOWN currency:', currencyAddr, 'raw:', raw, '— defaulting to hCASH. Add this address to HCASH_ADDRS or AVAX_ADDRS if wrong.');
+    // WAVAX / native AVAX (zero address)
+    if (ca===WAVAX_LOWER || ca==='0x0000000000000000000000000000000000000000')
+      return { priceHcash:0, priceAvax:raw, priceUsdc:0, label:'AVAX' };
+    // Unknown token — log and show as hCASH (most common for this game)
+    console.warn('[parseCurrency] unknown currency:', currencyAddr, '— treating as hCASH');
     return { priceHcash: raw, priceAvax:0, priceUsdc:0, label:'hCASH' };
   }
 
@@ -1357,15 +1324,6 @@ async function loadListings(marketContract, miners, allContracts) {
   }
 
   _allListings = listings;
-
-  // Patch Jarmer Jorn listings that didn't resolve name/image from minerMap
-  listings.forEach(l => {
-    if ((l.nftContract||'') === JARMER_JORN_ADDR) {
-      if (!l.minerName || l.minerName.startsWith('Miner #')) l.minerName = 'Jarmer Jorn';
-      if (!l.minerImg && minerMap[JARMER_JORN_ADDR]?.imageUrl) l.minerImg = minerMap[JARMER_JORN_ADDR].imageUrl;
-    }
-  });
-
   document.getElementById('tk-listings').textContent = listings.length + ' active';
   notif(`Loaded ${listings.length} marketplace listings ✓`, 'ok');
   renderMarket();
@@ -1461,14 +1419,8 @@ function renderMarket() {
         ? `<div class="listing-price avax">${f4(l.priceAvax)} AVAX</div>`
         : `<div class="listing-price usdc">$${fmtNum(l.priceUsdc,2)} USDC</div>`;
 
-    const imgSrc = l.minerImg || (l.nftContract === JARMER_JORN_ADDR ? null : null);
-    const imgHtml = imgSrc
-      ? `<img class="listing-img" src="${imgSrc}" alt="" loading="lazy"
-           onerror="const gateways=['https://cloudflare-ipfs.com/ipfs/','https://gateway.pinata.cloud/ipfs/','https://ipfs.io/ipfs/'];
-             const s=this.src; const ipfsHash=s.includes('/ipfs/')?s.split('/ipfs/')[1]:null;
-             if(ipfsHash){const ng=gateways.find(g=>!s.startsWith(g));if(ng){this.src=ng+ipfsHash;return;}}
-             this.style.display='none';this.nextElementSibling.style.display='flex'">
-         <div class="listing-img-placeholder" style="display:none">⛏</div>`
+    const imgHtml = l.minerImg
+      ? `<img class="listing-img" src="${l.minerImg}" alt="" loading="lazy" onerror="this.style.display='none'">`
       : `<div class="listing-img-placeholder">⛏</div>`;
 
     const ms = l.minerStats;
